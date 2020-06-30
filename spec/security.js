@@ -19,58 +19,20 @@ describe('security issues', function() {
         .toCompileTo('');
     });
 
-    it('should allow the "constructor" property to be accessed if it is enumerable', function() {
-      shouldCompileTo(
-        '{{constructor.name}}',
-        {
-          constructor: {
-            name: 'here we go'
-          }
-        },
-        'here we go'
-      );
-      shouldCompileTo(
-        '{{lookup (lookup this "constructor") "name"}}',
-        {
-          constructor: {
-            name: 'here we go'
-          }
-        },
-        'here we go'
-      );
+    it('should allow the "constructor" property to be accessed if it is an "ownProperty"', function() {
+      expectTemplate('{{constructor.name}}')
+        .withInput({ constructor: { name: 'here we go' } })
+        .toCompileTo('here we go');
+
+      expectTemplate('{{lookup (lookup this "constructor") "name"}}')
+        .withInput({ constructor: { name: 'here we go' } })
+        .toCompileTo('here we go');
     });
 
-    it('should allow the "constructor" property to be accessed if it is enumerable', function() {
-      shouldCompileTo(
-        '{{lookup (lookup this "constructor") "name"}}',
-        {
-          constructor: {
-            name: 'here we go'
-          }
-        },
-        'here we go'
-      );
-    });
-
-    it('should allow prototype properties that are not constructors', function() {
-      function TestClass() {}
-
-      Object.defineProperty(TestClass.prototype, 'abc', {
-        get: function() {
-          return 'xyz';
-        }
-      });
-
-      shouldCompileTo(
-        '{{#with this as |obj|}}{{obj.abc}}{{/with}}',
-        new TestClass(),
-        'xyz'
-      );
-      shouldCompileTo(
-        '{{#with this as |obj|}}{{lookup obj "abc"}}{{/with}}',
-        new TestClass(),
-        'xyz'
-      );
+    it('should allow the "constructor" property to be accessed if it is an "own property"', function() {
+      expectTemplate('{{lookup (lookup this "constructor") "name"}}')
+        .withInput({ constructor: { name: 'here we go' } })
+        .toCompileTo('here we go');
     });
   });
 
@@ -81,19 +43,13 @@ describe('security issues', function() {
 
     describe('without the option "allowExplicitCallOfHelperMissing"', function() {
       it('should throw an exception when calling  "{{helperMissing}}" ', function() {
-        shouldThrow(function() {
-          var template = Handlebars.compile('{{helperMissing}}');
-          template({});
-        }, Error);
+        expectTemplate('{{helperMissing}}').toThrow(Error);
       });
+
       it('should throw an exception when calling  "{{#helperMissing}}{{/helperMissing}}" ', function() {
-        shouldThrow(function() {
-          var template = Handlebars.compile(
-            '{{#helperMissing}}{{/helperMissing}}'
-          );
-          template({});
-        }, Error);
+        expectTemplate('{{#helperMissing}}{{/helperMissing}}').toThrow(Error);
       });
+
       it('should throw an exception when calling  "{{blockHelperMissing "abc" .}}" ', function() {
         var functionCalls = [];
         expect(function() {
@@ -106,17 +62,15 @@ describe('security issues', function() {
         }).to.throw(Error);
         expect(functionCalls.length).to.equal(0);
       });
+
       it('should throw an exception when calling  "{{#blockHelperMissing .}}{{/blockHelperMissing}}"', function() {
-        shouldThrow(function() {
-          var template = Handlebars.compile(
-            '{{#blockHelperMissing .}}{{/blockHelperMissing}}'
-          );
-          template({
+        expectTemplate('{{#blockHelperMissing .}}{{/blockHelperMissing}}')
+          .withInput({
             fn: function() {
               return 'functionInData';
             }
-          });
-        }, Error);
+          })
+          .toThrow(Error);
       });
     });
 
@@ -125,12 +79,14 @@ describe('security issues', function() {
         var template = Handlebars.compile('{{helperMissing}}');
         template({}, { allowCallsToHelperMissing: true });
       });
+
       it('should not throw an exception when calling  "{{#helperMissing}}{{/helperMissing}}" ', function() {
         var template = Handlebars.compile(
           '{{#helperMissing}}{{/helperMissing}}'
         );
         template({}, { allowCallsToHelperMissing: true });
       });
+
       it('should not throw an exception when calling  "{{blockHelperMissing "abc" .}}" ', function() {
         var functionCalls = [];
         var template = Handlebars.compile('{{blockHelperMissing "abc" .}}');
@@ -144,6 +100,7 @@ describe('security issues', function() {
         );
         equals(functionCalls.length, 1);
       });
+
       it('should not throw an exception when calling  "{{#blockHelperMissing .}}{{/blockHelperMissing}}"', function() {
         var template = Handlebars.compile(
           '{{#blockHelperMissing true}}sdads{{/blockHelperMissing}}'
@@ -170,39 +127,280 @@ describe('security issues', function() {
     });
   });
 
-  describe('GH-1595', function() {
-    it('properties, that are required to be enumerable', function() {
-      expectTemplate('{{constructor}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{__defineGetter__}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{__defineSetter__}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{__lookupGetter__}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{__proto__}}')
-        .withInput({})
-        .toCompileTo('');
+  describe('GH-1595: dangerous properties', function() {
+    var templates = [
+      '{{constructor}}',
+      '{{__defineGetter__}}',
+      '{{__defineSetter__}}',
+      '{{__lookupGetter__}}',
+      '{{__proto__}}',
+      '{{lookup this "constructor"}}',
+      '{{lookup this "__defineGetter__"}}',
+      '{{lookup this "__defineSetter__"}}',
+      '{{lookup this "__lookupGetter__"}}',
+      '{{lookup this "__proto__"}}'
+    ];
 
-      expectTemplate('{{lookup "constructor"}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{lookup "__defineGetter__"}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{lookup "__defineSetter__"}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{lookup "__lookupGetter__"}}')
-        .withInput({})
-        .toCompileTo('');
-      expectTemplate('{{lookup "__proto__"}}')
-        .withInput({})
-        .toCompileTo('');
+    templates.forEach(function(template) {
+      describe('access should be denied to ' + template, function() {
+        it('by default', function() {
+          expectTemplate(template)
+            .withInput({})
+            .toCompileTo('');
+        });
+        it(' with proto-access enabled', function() {
+          expectTemplate(template)
+            .withInput({})
+            .withRuntimeOptions({
+              allowProtoPropertiesByDefault: true,
+              allowProtoMethodsByDefault: true
+            })
+            .toCompileTo('');
+        });
+      });
+    });
+  });
+  describe('GH-1631: disallow access to prototype functions', function() {
+    function TestClass() {}
+
+    TestClass.prototype.aProperty = 'propertyValue';
+    TestClass.prototype.aMethod = function() {
+      return 'returnValue';
+    };
+
+    beforeEach(function() {
+      handlebarsEnv.resetLoggedPropertyAccesses();
+    });
+
+    afterEach(function() {
+      sinon.restore();
+    });
+
+    describe('control access to prototype methods via "allowedProtoMethods"', function() {
+      checkProtoMethodAccess({});
+
+      describe('in compat mode', function() {
+        checkProtoMethodAccess({ compat: true });
+      });
+
+      function checkProtoMethodAccess(compileOptions) {
+        it('should be prohibited by default and log a warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .toCompileTo('');
+
+          expect(spy.calledOnce).to.be.true();
+          expect(spy.args[0][0]).to.match(/Handlebars: Access has been denied/);
+        });
+
+        it('should only log the warning once', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .toCompileTo('');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .toCompileTo('');
+
+          expect(spy.calledOnce).to.be.true();
+          expect(spy.args[0][0]).to.match(/Handlebars: Access has been denied/);
+        });
+
+        it('can be allowed, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowedProtoMethods: {
+                aMethod: true
+              }
+            })
+            .toCompileTo('returnValue');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned on by default, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoMethodsByDefault: true
+            })
+            .toCompileTo('returnValue');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned off by default, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoMethodsByDefault: false
+            })
+            .toCompileTo('');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned off, if turned on by default', function() {
+          expectTemplate('{{aMethod}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoMethodsByDefault: true,
+              allowedProtoMethods: {
+                aMethod: false
+              }
+            })
+            .toCompileTo('');
+        });
+      }
+
+      it('should cause the recursive lookup by default (in "compat" mode)', function() {
+        expectTemplate('{{#aString}}{{trim}}{{/aString}}')
+          .withInput({ aString: '  abc  ', trim: 'trim' })
+          .withCompileOptions({ compat: true })
+          .toCompileTo('trim');
+      });
+
+      it('should not cause the recursive lookup if allowed through options(in "compat" mode)', function() {
+        expectTemplate('{{#aString}}{{trim}}{{/aString}}')
+          .withInput({ aString: '  abc  ', trim: 'trim' })
+          .withCompileOptions({ compat: true })
+          .withRuntimeOptions({
+            allowedProtoMethods: {
+              trim: true
+            }
+          })
+          .toCompileTo('abc');
+      });
+    });
+
+    describe('control access to prototype non-methods via "allowedProtoProperties" and "allowProtoPropertiesByDefault', function() {
+      checkProtoPropertyAccess({});
+
+      describe('in compat-mode', function() {
+        checkProtoPropertyAccess({ compat: true });
+      });
+
+      function checkProtoPropertyAccess(compileOptions) {
+        it('should be prohibited by default and log a warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aProperty}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .toCompileTo('');
+
+          expect(spy.calledOnce).to.be.true();
+          expect(spy.args[0][0]).to.match(/Handlebars: Access has been denied/);
+        });
+
+        it('can be explicitly prohibited by default, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aProperty}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoPropertiesByDefault: false
+            })
+            .toCompileTo('');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned on, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aProperty}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowedProtoProperties: {
+                aProperty: true
+              }
+            })
+            .toCompileTo('propertyValue');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned on by default, which disables the warning', function() {
+          var spy = sinon.spy(console, 'error');
+
+          expectTemplate('{{aProperty}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoPropertiesByDefault: true
+            })
+            .toCompileTo('propertyValue');
+
+          expect(spy.callCount).to.equal(0);
+        });
+
+        it('can be turned off, if turned on by default', function() {
+          expectTemplate('{{aProperty}}')
+            .withInput(new TestClass())
+            .withCompileOptions(compileOptions)
+            .withRuntimeOptions({
+              allowProtoPropertiesByDefault: true,
+              allowedProtoProperties: {
+                aProperty: false
+              }
+            })
+            .toCompileTo('');
+        });
+      }
+    });
+
+    describe('compatibility with old runtimes, that do not provide the function "container.lookupProperty"', function() {
+      beforeEach(function simulateRuntimeWithoutLookupProperty() {
+        var oldTemplateMethod = handlebarsEnv.template;
+        sinon.replace(handlebarsEnv, 'template', function(templateSpec) {
+          templateSpec.main = wrapToAdjustContainer(templateSpec.main);
+          return oldTemplateMethod.call(this, templateSpec);
+        });
+      });
+
+      afterEach(function() {
+        sinon.restore();
+      });
+
+      it('should work with simple properties', function() {
+        expectTemplate('{{aProperty}}')
+          .withInput({ aProperty: 'propertyValue' })
+          .toCompileTo('propertyValue');
+      });
+
+      it('should work with Array.prototype.length', function() {
+        expectTemplate('{{anArray.length}}')
+          .withInput({ anArray: ['a', 'b', 'c'] })
+          .toCompileTo('3');
+      });
     });
   });
 });
+
+function wrapToAdjustContainer(precompiledTemplateFunction) {
+  return function templateFunctionWrapper(container /*, more args */) {
+    delete container.lookupProperty;
+    return precompiledTemplateFunction.apply(this, arguments);
+  };
+}

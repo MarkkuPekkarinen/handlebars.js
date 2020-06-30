@@ -1,24 +1,215 @@
-const childProcess = require('child_process'),
-  fs = require('fs'),
-  os = require('os'),
-  expect = require('chai').expect;
+const childProcess = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const chai = require('chai');
+chai.use(require('chai-diff'));
+const expect = chai.expect;
+
+const testCases = [
+  {
+    binInputParameters: ['-a', 'spec/artifacts/empty.handlebars'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.amd.js'
+  },
+  {
+    binInputParameters: [
+      '-a',
+      '-f',
+      'TEST_OUTPUT',
+      'spec/artifacts/empty.handlebars'
+    ],
+    outputLocation: 'TEST_OUTPUT',
+    expectedOutputSpec: './spec/expected/empty.amd.js'
+  },
+  {
+    binInputParameters: [
+      '-a',
+      '-n',
+      'CustomNamespace.templates',
+      'spec/artifacts/empty.handlebars'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.amd.namespace.js'
+  },
+  {
+    binInputParameters: [
+      '-a',
+      '--namespace',
+      'CustomNamespace.templates',
+      'spec/artifacts/empty.handlebars'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.amd.namespace.js'
+  },
+  {
+    binInputParameters: ['-a', '-s', 'spec/artifacts/empty.handlebars'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.amd.simple.js'
+  },
+  {
+    binInputParameters: ['-a', '-m', 'spec/artifacts/empty.handlebars'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.amd.min.js'
+  },
+  {
+    binInputParameters: [
+      'spec/artifacts/known.helpers.handlebars',
+      '-a',
+      '-k',
+      'someHelper',
+      '-k',
+      'anotherHelper',
+      '-o'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/non.empty.amd.known.helper.js'
+  },
+  {
+    binInputParameters: ['--help'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/help.menu.txt'
+  },
+  {
+    binInputParameters: ['-v'],
+    outputLocation: 'stdout',
+    expectedOutput: require('../package.json').version
+  },
+  {
+    binInputParameters: [
+      '-a',
+      '-e',
+      'hbs',
+      './spec/artifacts/non.default.extension.hbs'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/non.default.extension.amd.js'
+  },
+  {
+    binInputParameters: [
+      '-a',
+      '-p',
+      './spec/artifacts/partial.template.handlebars'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/partial.template.js'
+  },
+  {
+    binInputParameters: ['spec/artifacts/empty.handlebars', '-c'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.common.js'
+  },
+  {
+    binInputParameters: [
+      'spec/artifacts/empty.handlebars',
+      'spec/artifacts/empty.handlebars',
+      '-a',
+      '-n',
+      'someNameSpace'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/namespace.amd.js'
+  },
+  {
+    binInputParameters: [
+      'spec/artifacts/empty.handlebars',
+      '-h',
+      'some-path/',
+      '-a'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/handlebar.path.amd.js'
+  },
+  {
+    binInputParameters: [
+      'spec/artifacts/partial.template.handlebars',
+      '-r',
+      'spec',
+      '-a'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.root.amd.js'
+  },
+  {
+    binInputParameters: [
+      '-i',
+      '<div>1</div>',
+      '-i',
+      '<div>2</div>',
+      '-N',
+      'firstTemplate',
+      '-N',
+      'secondTemplate',
+      '-a'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.name.amd.js'
+  },
+  {
+    binInputParameters: [
+      '-i',
+      '<div>1</div>',
+      '-a',
+      '-m',
+      '-N',
+      'test',
+      '--map',
+      './spec/tmp/source.map.amd.txt'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/source.map.amd.js'
+  },
+  {
+    binInputParameters: ['./spec/artifacts/bom.handlebars', '-b', '-a'],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/bom.amd.js'
+  },
+  // Issue #1673
+  {
+    binInputParameters: [
+      '--amd',
+      '--no-amd',
+      'spec/artifacts/empty.handlebars'
+    ],
+    outputLocation: 'stdout',
+    expectedOutputSpec: './spec/expected/empty.common.js'
+  }
+];
 
 module.exports = function(grunt) {
   grunt.registerTask('test:bin', function() {
-    const stdout = executeBinHandlebars(
-      '-a',
-      'spec/artifacts/empty.handlebars'
+    testCases.forEach(
+      ({
+        binInputParameters,
+        outputLocation,
+        expectedOutputSpec,
+        expectedOutput
+      }) => {
+        const stdout = executeBinHandlebars(...binInputParameters);
+
+        if (!expectedOutput && expectedOutputSpec) {
+          expectedOutput = fs.readFileSync(expectedOutputSpec, 'utf-8');
+        }
+
+        const useStdout = outputLocation === 'stdout';
+        const normalizedOutput = normalizeCrlf(
+          useStdout ? stdout : fs.readFileSync(outputLocation, 'utf-8')
+        );
+        const normalizedExpectedOutput = normalizeCrlf(expectedOutput);
+
+        if (!useStdout) {
+          fs.unlinkSync(outputLocation);
+        }
+
+        expect(normalizedOutput).not.to.be.differentFrom(
+          normalizedExpectedOutput,
+          {
+            relaxedSpace: true
+          }
+        );
+      }
     );
-
-    const expectedOutput = fs.readFileSync(
-      './spec/expected/empty.amd.js',
-      'utf-8'
-    );
-
-    const normalizedOutput = normalizeCrlf(stdout);
-    const normalizedExpectedOutput = normalizeCrlf(expectedOutput);
-
-    expect(normalizedOutput).to.equal(normalizedExpectedOutput);
   });
 };
 
@@ -34,7 +225,13 @@ function executeBinHandlebars(...args) {
 }
 
 function execFilesSyncUtf8(command, args) {
-  return childProcess.execFileSync(command, args, { encoding: 'utf-8' });
+  const env = process.env;
+  env.PATH = addPathToNodeJs(env.PATH);
+  return childProcess.execFileSync(command, args, { encoding: 'utf-8', env });
+}
+
+function addPathToNodeJs(pathEnvironment) {
+  return path.dirname(process.argv0) + path.delimiter + pathEnvironment;
 }
 
 function normalizeCrlf(string) {

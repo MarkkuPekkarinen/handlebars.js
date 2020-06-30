@@ -240,3 +240,19 @@ function testExceptionWithNodeTypings() {
   let fileName: string = exception.fileName;
   let stack: string | undefined = exception.stack;
 }
+
+function testProtoAccessControlControlOptions() {
+  Handlebars.compile('test')(
+    {},
+    {
+      allowedProtoMethods: { allowedMethod: true, forbiddenMethod: false },
+      allowedProtoProperties: { allowedProperty: true, forbiddenProperty: false },
+      allowProtoMethodsByDefault: true,
+      allowProtoPropertiesByDefault: false,
+    }
+  );
+}
+
+function testHandlebarsVersion() {
+  let version: string = Handlebars.VERSION;
+}
